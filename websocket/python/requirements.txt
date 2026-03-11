@@ -1,0 +1,4 @@
+websockets>=13
+sounddevice
+python-dotenv
+aiohttp

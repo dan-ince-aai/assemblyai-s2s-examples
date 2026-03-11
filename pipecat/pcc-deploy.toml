@@ -1,0 +1,6 @@
+agent_name = "assemblyai-voice-agent"
+image = "YOUR_DOCKERHUB_USERNAME/assemblyai-voice-agent:0.1"
+secret_set = "assemblyai-secrets"
+
+[scaling]
+	min_agents = 1
