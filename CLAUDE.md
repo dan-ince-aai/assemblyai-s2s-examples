@@ -73,13 +73,16 @@ lk agent status
 lk agent logs
 ```
 
-### "I want to deploy the web app to Vercel"
+### "I want to deploy the web app"
+The Next.js app uses a custom Node.js server (`server.ts`) for WebSocket proxying — it cannot run on Vercel. Use Railway or Render.
+
 ```bash
+npm i -g @railway/cli
+railway login
 cd nextjs-frontend
-npm i -g vercel
-vercel login
-vercel --prod
-# When prompted: set NEXT_PUBLIC_ASSEMBLYAI_API_KEY
+railway init
+railway up
+# Set ASSEMBLYAI_API_KEY in Railway dashboard → Variables
 ```
 
 ### "I want to deploy to Railway"

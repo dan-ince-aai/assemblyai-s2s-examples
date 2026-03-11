@@ -2,7 +2,7 @@
 
 A complete Next.js 15 web application for real-time voice conversations with AssemblyAI's Speech-to-Speech API. Dark-themed, mobile-friendly, and deployable to Vercel in one click.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/dan-ince-aai/assemblyai-s2s-examples&root-directory=nextjs-frontend&env=NEXT_PUBLIC_ASSEMBLYAI_API_KEY&project-name=assemblyai-voice-agent)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repository=https://github.com/dan-ince-aai/assemblyai-s2s-examples)
 
 ## What it does
 
@@ -26,26 +26,52 @@ npm run dev
 # Open http://localhost:3000
 ```
 
-## Deploy to Vercel
+## Deploy
 
-### One-click deploy
+### Railway (recommended)
 
-Click the button above — you'll only be asked for your `NEXT_PUBLIC_ASSEMBLYAI_API_KEY`. The API URL defaults to the US region automatically.
-
-### CLI deploy
+The app uses a custom Node.js server (`server.ts`) to proxy WebSocket connections to AssemblyAI with the `Authorization: Bearer` header — browsers can't send this header directly. Vercel's serverless platform doesn't support long-lived WebSocket connections, so **Railway is the recommended deploy target**.
 
 ```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Login
-vercel login
-
-# Deploy to production
-vercel --prod
+npm i -g @railway/cli
+railway login
+cd nextjs-frontend
+railway init
+railway up
+# Set ASSEMBLYAI_API_KEY in Railway dashboard → Variables
 ```
 
-The only environment variable you need is `NEXT_PUBLIC_ASSEMBLYAI_API_KEY`. Set it in the Vercel dashboard under Settings → Environment Variables, or when prompted by the CLI.
+### Fly.io
+
+```bash
+brew install flyctl
+fly auth login
+cd nextjs-frontend
+fly launch   # uses fly.toml — skip config prompts
+fly secrets set ASSEMBLYAI_API_KEY=your_key_here
+fly deploy
+```
+
+### Render
+
+Push to GitHub, connect at render.com → New Web Service.
+- Build command: `npm install && npm run build`
+- Start command: `npm start`
+- Add `ASSEMBLYAI_API_KEY` in the Environment section.
+
+### Local dev
+
+```bash
+cp .env.local.example .env.local
+# Add your ASSEMBLYAI_API_KEY
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+### Why not Vercel?
+
+Vercel serverless functions time out after 30 seconds and don't support WebSocket upgrade connections. The app works on any platform that runs a persistent Node.js server (Railway, Render, Fly.io, EC2, etc.).
 
 ## Architecture — Audio Flow
 

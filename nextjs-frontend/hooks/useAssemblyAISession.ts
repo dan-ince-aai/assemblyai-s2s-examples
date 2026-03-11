@@ -92,16 +92,10 @@ export function useAssemblyAISession(): AssemblyAISession {
     setTranscript("");
     setAgentText("");
 
-    const apiKey = process.env.NEXT_PUBLIC_ASSEMBLYAI_API_KEY ?? "";
-    const wsUrl =
-      process.env.NEXT_PUBLIC_ASSEMBLYAI_URL ??
-      "wss://speech-to-speech.us.assemblyai.com/v1/realtime";
-
-    if (!apiKey) {
-      setError("NEXT_PUBLIC_ASSEMBLYAI_API_KEY is not set.");
-      setStatus("idle");
-      return;
-    }
+    // Connect to the server-side WebSocket proxy at /ws.
+    // server.ts handles the connection and adds the Authorization header.
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${proto}://${window.location.host}/ws`;
 
     // Request microphone access
     let stream: MediaStream;
@@ -120,11 +114,7 @@ export function useAssemblyAISession(): AssemblyAISession {
     const audioCtx = new AudioContext({ sampleRate: 24000 });
     audioCtxRef.current = audioCtx;
 
-    // Connect WebSocket with Authorization header
-    // Note: browsers don't support custom headers in WebSocket constructor,
-    // so we pass the key as a query parameter instead.
-    const url = `${wsUrl}?api_key=${encodeURIComponent(apiKey)}`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     // Create a ScriptProcessorNode to capture raw PCM from the mic

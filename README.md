@@ -2,7 +2,8 @@
 
 > A collection of production-ready voice agent examples using AssemblyAI's native Speech-to-Speech API. Clone any example, add your API key, and go.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/dan-ince-aai/assemblyai-s2s-examples&root-directory=nextjs-frontend&env=NEXT_PUBLIC_ASSEMBLYAI_API_KEY&project-name=assemblyai-voice-agent)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repository=https://github.com/dan-ince-aai/assemblyai-s2s-examples)
+
 
 ## Quick Start
 
@@ -16,7 +17,7 @@
 | Raw WebSocket (Node) | WebSocket | `cd websocket/node && node client.js` | Any server |
 | Tool calling | WebSocket | `cd tool-calling && python 01_basic_tools.py` | Any server |
 | Phone agent | Twilio + FastAPI | `cd phone && uvicorn server:app --port 8080` | Railway / Render |
-| Voice web app | Next.js | `cd nextjs-frontend && npm run dev` | Vercel |
+| Voice web app | Next.js | `cd nextjs-frontend && npm run dev` | Railway / Render |
 
 ## Give Your Agent a Phone Number
 

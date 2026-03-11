@@ -31,6 +31,17 @@ railway up
 # Copy the Railway URL (e.g. https://my-app.up.railway.app)
 ```
 
+**Fly.io:**
+```bash
+brew install flyctl
+fly auth login
+cd phone/
+fly launch   # uses fly.toml — skip config prompts
+fly secrets set ASSEMBLYAI_API_KEY=your_key_here
+fly deploy
+# Copy the Fly URL (e.g. https://assemblyai-phone-agent.fly.dev)
+```
+
 **Render:**
 Push to GitHub, connect at render.com -> New Web Service. Set:
 - Build command: `pip install -r requirements.txt`
