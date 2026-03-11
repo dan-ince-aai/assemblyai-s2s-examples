@@ -127,7 +127,7 @@ export function useAssemblyAISession(): AssemblyAISession {
       const float32 = e.inputBuffer.getChannelData(0);
       const int16 = float32ToInt16(float32);
       const b64 = int16ArrayToBase64(int16);
-      ws.send(JSON.stringify({ type: "audio.append", audio: b64 }));
+      ws.send(JSON.stringify({ type: "input.audio", audio: b64 }));
     };
 
     source.connect(processor);
@@ -150,13 +150,13 @@ export function useAssemblyAISession(): AssemblyAISession {
 
       if (type === "session.ready") {
         setStatus("listening");
-      } else if (type === "speech.started") {
+      } else if (type === "input.speech.started") {
         setStatus("listening");
       } else if (type === "transcript.user") {
         setTranscript((msg.text as string) ?? "");
-      } else if (type === "response.started") {
+      } else if (type === "reply.started") {
         setStatus("speaking");
-      } else if (type === "response.audio") {
+      } else if (type === "reply.audio") {
         const b64 = msg.data as string;
         if (!b64) return;
 
@@ -173,11 +173,11 @@ export function useAssemblyAISession(): AssemblyAISession {
         bufferSource.buffer = buffer;
         bufferSource.connect(audioCtx.destination);
         bufferSource.start();
-      } else if (type === "response.transcript") {
+      } else if (type === "transcript.agent") {
         setAgentText((msg.text as string) ?? "");
-      } else if (type === "response.done") {
+      } else if (type === "reply.done") {
         setStatus("listening");
-      } else if (type === "error") {
+      } else if (type === "session.error") {
         const errMsg =
           (msg.message as string) ?? JSON.stringify(msg);
         setError(errMsg);

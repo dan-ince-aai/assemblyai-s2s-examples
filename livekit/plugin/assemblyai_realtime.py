@@ -35,7 +35,7 @@ class _Generation:
 
 
 def _serialize_tool(tool: llm.Tool) -> dict | None:
-    """Convert a FunctionTool or RawFunctionTool to the native session.configure format."""
+    """Convert a FunctionTool or RawFunctionTool to the native session.update format."""
     if isinstance(tool, llm.FunctionTool):
         desc = llm.utils.build_legacy_openai_schema(tool, internally_tagged=True)
         return desc
@@ -95,7 +95,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         self._pending_reply_fut: asyncio.Future[llm.GenerationCreatedEvent] | None = (
             None
         )
-        self._current_response_id: str | None = None
+        self._current_reply_id: str | None = None
 
         self._pending_call_ids: set[str] = set()
         self._session_ready: bool = False
@@ -134,7 +134,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
             for chunk in self._bstream.write(f.data.tobytes()):
                 self._send(
                     {
-                        "type": "audio.append",
+                        "type": "input.audio",
                         "audio": base64.b64encode(chunk.data).decode(),
                     }
                 )
@@ -148,7 +148,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         loop = asyncio.get_event_loop()
         fut: asyncio.Future[llm.GenerationCreatedEvent] = loop.create_future()
         self._pending_reply_fut = fut
-        self._send({"type": "response.create"})
+        self._send({"type": "reply.create"})
 
         def _on_timeout() -> None:
             if fut and not fut.done():
@@ -159,9 +159,9 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         return fut
 
     def interrupt(self) -> None:
-        if self._current_response_id:
+        if self._current_reply_id:
             self._send(
-                {"type": "response.cancel", "response_id": self._current_response_id}
+                {"type": "reply.cancel", "reply_id": self._current_reply_id}
             )
 
     def commit_audio(self) -> None:
@@ -182,12 +182,12 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
 
     async def update_instructions(self, instructions: str) -> None:
         self._send(
-            {"type": "session.configure", "session": {"system_prompt": instructions}}
+            {"type": "session.update", "session": {"system_prompt": instructions}}
         )
 
     async def update_tools(self, tools: list[llm.Tool]) -> None:
         serialized = [s for t in tools if (s := _serialize_tool(t)) is not None]
-        self._send({"type": "session.configure", "session": {"tools": serialized}})
+        self._send({"type": "session.update", "session": {"tools": serialized}})
         self._tools = llm.ToolContext(
             [t for t in tools if isinstance(t, (llm.FunctionTool, llm.RawFunctionTool))]
         )
@@ -197,7 +197,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
     ) -> None:
         if is_given(tool_choice):
             self._send(
-                {"type": "session.configure", "session": {"tool_choice": tool_choice}}
+                {"type": "session.update", "session": {"tool_choice": tool_choice}}
             )
 
     async def update_chat_ctx(self, chat_ctx: llm.ChatContext) -> None:
@@ -212,7 +212,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
                 ):
                     self._send(
                         {
-                            "type": "function.result",
+                            "type": "tool.result",
                             "call_id": item.call_id,
                             "result": item.output,
                         }
@@ -225,7 +225,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
                     text = item.text_content or ""
                     if text:
                         self._send(
-                            {"type": "message.add", "role": item.role, "content": text}
+                            {"type": "conversation.message", "role": item.role, "content": text}
                         )
         self._chat_ctx = chat_ctx
 
@@ -297,13 +297,13 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
     def _handle_event(self, event: dict) -> None:
         t = event.get("type", "")
         # Log every event except high-frequency audio
-        if t != "response.audio":
+        if t != "reply.audio":
             logger.debug(f"← {t}  {event}")
         if t == "session.ready":
             self._handle_session_ready(event)
-        elif t == "speech.started":
+        elif t == "input.speech.started":
             self.emit("input_speech_started", llm.InputSpeechStartedEvent())
-        elif t == "speech.stopped":
+        elif t == "input.speech.stopped":
             self.emit(
                 "input_speech_stopped",
                 llm.InputSpeechStoppedEvent(user_transcription_enabled=True),
@@ -317,33 +317,33 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
                     is_final=True,
                 ),
             )
-        elif t == "response.started":
+        elif t == "reply.started":
             self._handle_response_started(event)
-        elif t == "response.audio":
+        elif t == "reply.audio":
             self._handle_response_audio(event)
-        elif t == "response.transcript":
+        elif t == "transcript.agent":
             self._handle_transcript_done(event)
-        elif t == "response.done":
+        elif t == "reply.done":
             self._handle_response_done(event)
-        elif t == "response.interrupted":
+        elif t == "reply.interrupted":
             self._handle_response_interrupted(event)
-        elif t == "function.call":
+        elif t == "tool.call":
             self._handle_function_call(event)
         elif t == "session.updated":
             pass
         elif t == "transcript.user.delta":
             pass
-        elif t == "error":
+        elif t == "session.error":
             self._handle_error(event)
 
     def _handle_session_ready(self, event: dict) -> None:
         self._session_ready = True
         if self._pending_reply_fut and not self._pending_reply_fut.done():
-            self._send({"type": "response.create"})
+            self._send({"type": "reply.create"})
 
     def _handle_response_started(self, event: dict) -> None:
-        response_id = event.get("response_id", "")
-        self._current_response_id = response_id
+        response_id = event.get("reply_id", "")
+        self._current_reply_id = response_id
 
         text_ch: utils.aio.Chan[str] = utils.aio.Chan()
         audio_ch: utils.aio.Chan[rtc.AudioFrame] = utils.aio.Chan()
@@ -414,11 +414,11 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
 
     def _handle_response_done(self, event: dict) -> None:
         self._close_current_gen()
-        self._current_response_id = None
+        self._current_reply_id = None
 
     def _handle_response_interrupted(self, event: dict) -> None:
         self._close_current_gen()
-        self._current_response_id = None
+        self._current_reply_id = None
 
     def _handle_function_call(self, event: dict) -> None:
         gen = self._current_gen

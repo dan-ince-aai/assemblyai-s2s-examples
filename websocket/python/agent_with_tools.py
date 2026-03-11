@@ -182,7 +182,7 @@ async def run(url: str, api_key: str) -> None:
                         pass
                     if chunks:
                         b64 = base64.b64encode(b"".join(chunks)).decode()
-                        await ws.send(json.dumps({"type": "audio.append", "audio": b64}))
+                        await ws.send(json.dumps({"type": "input.audio", "audio": b64}))
                     await asyncio.sleep(0.02)
 
             async def receive_events():
@@ -193,7 +193,7 @@ async def run(url: str, api_key: str) -> None:
                     if t == "session.ready":
                         print(f"{GREEN}Session ready — configuring tools...{RESET}")
                         await ws.send(json.dumps({
-                            "type": "session.configure",
+                            "type": "session.update",
                             "session": {
                                 "system_prompt": SYSTEM_PROMPT,
                                 "tools": TOOLS,
@@ -207,17 +207,17 @@ async def run(url: str, api_key: str) -> None:
                     elif t == "transcript.user":
                         print(f"\r{GREEN}[You] {event.get('text', '')}{RESET}")
 
-                    elif t == "response.audio":
+                    elif t == "reply.audio":
                         data = base64.b64decode(event.get("data", ""))
                         if data:
                             playback_queue.put(data)
 
-                    elif t == "response.transcript":
+                    elif t == "transcript.agent":
                         text = event.get("text", "")
                         if text:
                             print(f"{BLUE}[Agent] {text}{RESET}")
 
-                    elif t == "function.call":
+                    elif t == "tool.call":
                         call_id = event.get("call_id", "")
                         name = event.get("name", "")
                         args = event.get("args", {})
@@ -227,12 +227,12 @@ async def run(url: str, api_key: str) -> None:
                         print(f"{CYAN}[Tool result] {result}{RESET}")
 
                         await ws.send(json.dumps({
-                            "type": "function.result",
+                            "type": "tool.result",
                             "call_id": call_id,
                             "result": result,
                         }))
 
-                    elif t == "error":
+                    elif t == "session.error":
                         msg = event.get("message") or str(event)
                         print(f"{RED}[Error] {msg}{RESET}", file=sys.stderr)
 

@@ -58,7 +58,7 @@ app.prepare().then(() => {
   wss.on("connection", (browserWs: WebSocket) => {
     if (!AAI_KEY) {
       browserWs.send(
-        JSON.stringify({ type: "error", message: "ASSEMBLYAI_API_KEY not set on server." })
+        JSON.stringify({ type: "session.error", message: "ASSEMBLYAI_API_KEY not set on server." })
       );
       browserWs.close();
       return;
@@ -93,7 +93,7 @@ app.prepare().then(() => {
 
     aaiWs.on("error", (err) => {
       console.error("[proxy] AssemblyAI error:", err.message);
-      browserWs.send(JSON.stringify({ type: "error", message: err.message }));
+      browserWs.send(JSON.stringify({ type: "session.error", message: err.message }));
       browserWs.close();
     });
 

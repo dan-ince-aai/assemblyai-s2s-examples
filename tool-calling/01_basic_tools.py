@@ -1,14 +1,14 @@
 """AssemblyAI S2S Tool Calling — Example 1: Basic Tools.
 
-Demonstrates the function.call / function.result protocol with two simple tools:
+Demonstrates the tool.call / tool.result protocol with two simple tools:
   - get_current_time: returns the current ISO timestamp
   - flip_coin:        returns heads or tails
 
 The script:
 1. Connects to the AssemblyAI S2S WebSocket
-2. On session.ready, sends session.configure with tools + system prompt
+2. On session.ready, sends session.update with tools + system prompt
 3. Streams microphone audio to the server
-4. Handles function.call events and sends function.result back
+4. Handles tool.call events and sends tool.result back
 5. Plays back the agent's audio response
 
 Audio format: PCM16, 24 kHz, mono
@@ -54,7 +54,7 @@ RED = "\033[91m"
 RESET = "\033[0m"
 BOLD = "\033[1m"
 
-# ── Tool definitions (sent in session.configure) ──────────────────────────────
+# ── Tool definitions (sent in session.update) ─────────────────────────────────
 
 TOOLS = [
     {
@@ -177,7 +177,7 @@ async def run() -> None:
                         pass
                     if chunks:
                         b64 = base64.b64encode(b"".join(chunks)).decode()
-                        await ws.send(json.dumps({"type": "audio.append", "audio": b64}))
+                        await ws.send(json.dumps({"type": "input.audio", "audio": b64}))
                     await asyncio.sleep(0.02)
 
             async def receive_events():
@@ -190,7 +190,7 @@ async def run() -> None:
                         # Configure tools and system prompt after session is ready
                         print(f"{GREEN}Session ready — registering tools...{RESET}")
                         await ws.send(json.dumps({
-                            "type": "session.configure",
+                            "type": "session.update",
                             "session": {
                                 "system_prompt": SYSTEM_PROMPT,
                                 "tools": TOOLS,
@@ -204,18 +204,18 @@ async def run() -> None:
                     elif t == "transcript.user":
                         print(f"\r{GREEN}[You] {event.get('text', '')}{RESET}")
 
-                    elif t == "response.audio":
+                    elif t == "reply.audio":
                         # Decode and enqueue for playback
                         data = base64.b64decode(event.get("data", ""))
                         if data:
                             playback_queue.put(data)
 
-                    elif t == "response.transcript":
+                    elif t == "transcript.agent":
                         text = event.get("text", "")
                         if text:
                             print(f"{BLUE}[Agent] {text}{RESET}")
 
-                    elif t == "function.call":
+                    elif t == "tool.call":
                         # Handle tool call
                         call_id = event.get("call_id", "")
                         name = event.get("name", "")
@@ -227,12 +227,12 @@ async def run() -> None:
 
                         # Send the result back so the agent can continue
                         await ws.send(json.dumps({
-                            "type": "function.result",
+                            "type": "tool.result",
                             "call_id": call_id,
                             "result": result,
                         }))
 
-                    elif t == "error":
+                    elif t == "session.error":
                         msg = event.get("message") or str(event)
                         print(f"{RED}[Error] {msg}{RESET}", file=sys.stderr)
 

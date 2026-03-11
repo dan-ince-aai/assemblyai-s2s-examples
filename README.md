@@ -70,20 +70,20 @@ AssemblyAI's Speech-to-Speech (S2S) API is a native real-time voice conversation
 - **Built-in VAD** — server-side voice activity detection, no client configuration needed
 - **Automatic turn detection** — the model decides when the user has finished speaking
 - **Native audio output** — the model streams PCM16 audio back directly
-- **Function calling** — register tools and handle `function.call` / `function.result` events
+- **Function calling** — register tools and handle `tool.call` / `tool.result` events
 - **Low latency** — end-to-end voice-to-voice in a single hop
 
 The protocol uses simple JSON events over WebSocket:
 
 ```
--> audio.append        { audio: <base64 PCM16 24kHz mono> }
--> session.configure   { session: { system_prompt, tools } }
+-> input.audio         { audio: <base64 PCM16 24kHz mono> }
+-> session.update      { session: { system_prompt, tools } }
 <- session.ready
 <- transcript.user     { text }
-<- response.audio      { data: <base64 PCM16> }
-<- response.transcript { text }
-<- function.call       { call_id, name, args }
--> function.result     { call_id, result }
+<- reply.audio         { data: <base64 PCM16> }
+<- transcript.agent    { text }
+<- tool.call           { call_id, name, args }
+-> tool.result         { call_id, result }
 ```
 
 ## Examples

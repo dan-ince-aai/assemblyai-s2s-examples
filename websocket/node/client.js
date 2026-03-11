@@ -71,7 +71,7 @@ function startMic() {
   micStream.stream().on("data", (chunk) => {
     if (ws.readyState === WebSocket.OPEN) {
       const b64 = chunk.toString("base64");
-      ws.send(JSON.stringify({ type: "audio.append", audio: b64 }));
+      ws.send(JSON.stringify({ type: "input.audio", audio: b64 }));
     }
   });
 
@@ -112,7 +112,7 @@ ws.on("message", (data) => {
   if (type === "session.ready") {
     console.log(`${GREEN}Session ready — speak into your microphone.${RESET}`);
     startMic();
-  } else if (type === "speech.started") {
+  } else if (type === "input.speech.started") {
     process.stdout.write(`\n${YELLOW}[listening...]${RESET}`);
   } else if (type === "transcript.user.delta") {
     const text = event.text || "";
@@ -120,21 +120,21 @@ ws.on("message", (data) => {
   } else if (type === "transcript.user") {
     const text = event.text || "";
     console.log(`\r${GREEN}[You] ${text}${RESET}`);
-  } else if (type === "response.started") {
+  } else if (type === "reply.started") {
     console.log(`${BLUE}[Agent speaking...]${RESET}`);
-  } else if (type === "response.audio") {
+  } else if (type === "reply.audio") {
     const audioData = Buffer.from(event.data || "", "base64");
     if (audioData.length > 0) {
       speaker.write(audioData);
     }
-  } else if (type === "response.transcript") {
+  } else if (type === "transcript.agent") {
     const text = event.text || "";
     if (text) {
       console.log(`${BLUE}[Agent] ${text}${RESET}`);
     }
-  } else if (type === "response.done") {
+  } else if (type === "reply.done") {
     console.log(`${BLUE}[Agent done]${RESET}`);
-  } else if (type === "error") {
+  } else if (type === "session.error") {
     const msg = event.message || JSON.stringify(event);
     console.error(`${RED}[Error] ${msg}${RESET}`);
   }

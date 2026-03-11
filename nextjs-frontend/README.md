@@ -89,11 +89,11 @@ ScriptProcessorNode (4096 frames)
     |     Float32Array -> Int16Array (PCM16)
     |     Int16Array -> base64
     |
-WebSocket.send({ type: "audio.append", audio: base64 })
+WebSocket.send({ type: "input.audio", audio: base64 })
     |
 AssemblyAI S2S API
     |
-response.audio: { data: base64 PCM16 }
+reply.audio: { data: base64 PCM16 }
     |
 base64 -> Int16Array -> Float32Array
     |

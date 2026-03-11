@@ -2,23 +2,23 @@
 
 Implements LLMService using AssemblyAI's native S2S WebSocket protocol.
 The protocol is distinct from the OpenAI-compatible endpoint — it uses
-event types like session.configure, audio.append, response.started, etc.
+event types like session.update, input.audio, reply.started, etc.
 
 Protocol summary (→ = client sends, ← = server sends):
-  → audio.append          { audio: <base64 PCM> }
-  → session.configure     { session: { system_prompt, tools, ... } }
-  → response.create       (trigger a response manually)
-  → response.cancel       { response_id }
-  → function.result       { call_id, result }
+  → input.audio           { audio: <base64 PCM> }
+  → session.update        { session: { system_prompt, tools, ... } }
+  → reply.create          (trigger a response manually)
+  → reply.cancel          { reply_id }
+  → tool.result           { call_id, result }
   ← session.ready
-  ← speech.started / speech.stopped
+  ← input.speech.started / input.speech.stopped
   ← transcript.user.delta { text } / transcript.user { text, item_id }
-  ← response.started      { response_id }
-  ← response.audio        { data: <base64 PCM> }
-  ← response.transcript   { text }  (full agent turn transcript)
-  ← response.done / response.interrupted
-  ← function.call         { call_id, name, args }
-  ← error                 { message }
+  ← reply.started         { reply_id }
+  ← reply.audio           { data: <base64 PCM> }
+  ← transcript.agent      { text }  (full agent turn transcript)
+  ← reply.done / reply.interrupted
+  ← tool.call             { call_id, name, args }
+  ← session.error         { message }
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
         self._websocket: websockets.asyncio.client.ClientConnection | None = None
         self._receive_task: asyncio.Task | None = None
         self._session_ready = False
-        self._current_response_id: str | None = None
+        self._current_reply_id: str | None = None
         self._bot_speaking = False
 
         # Accumulates delta text so we can emit correct interim frames
@@ -141,7 +141,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
             self._websocket = None
         self._session_ready = False
         self._bot_speaking = False
-        self._current_response_id = None
+        self._current_reply_id = None
 
     async def _send(self, msg: dict) -> None:
         if self._websocket:
@@ -165,7 +165,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
 
     async def _send_user_audio(self, frame: InputAudioRawFrame) -> None:
         audio_b64 = base64.b64encode(frame.audio).decode()
-        await self._send({"type": "audio.append", "audio": audio_b64})
+        await self._send({"type": "input.audio", "audio": audio_b64})
 
     async def _handle_context(self, frame: LLMContextFrame) -> None:
         """Extract the system prompt from the context and configure the session."""
@@ -178,7 +178,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
                     )
                 if content:
                     await self._send({
-                        "type": "session.configure",
+                        "type": "session.update",
                         "session": {"system_prompt": content},
                     })
                 break
@@ -204,32 +204,32 @@ class AssemblyAIRealtimeLLMService(LLMService):
         t = event.get("type", "")
 
         # Debug log everything except high-frequency audio
-        if t != "response.audio":
+        if t != "reply.audio":
             logger.debug(f"← {t}  {event}")
 
         if t == "session.ready":
             await self._on_session_ready(event)
-        elif t == "speech.started":
+        elif t == "input.speech.started":
             await self._on_speech_started()
-        elif t == "speech.stopped":
+        elif t == "input.speech.stopped":
             await self._on_speech_stopped()
         elif t == "transcript.user.delta":
             await self._on_user_transcript_delta(event)
         elif t == "transcript.user":
             await self._on_user_transcript(event)
-        elif t == "response.started":
+        elif t == "reply.started":
             await self._on_response_started(event)
-        elif t == "response.audio":
+        elif t == "reply.audio":
             await self._on_response_audio(event)
-        elif t == "response.transcript":
+        elif t == "transcript.agent":
             await self._on_response_transcript(event)
-        elif t == "response.done":
+        elif t == "reply.done":
             await self._on_response_done()
-        elif t == "response.interrupted":
+        elif t == "reply.interrupted":
             await self._on_response_interrupted()
-        elif t == "function.call":
+        elif t == "tool.call":
             await self._on_function_call(event)
-        elif t == "error":
+        elif t == "session.error":
             await self._on_error(event)
 
     # ── Server Event Handlers ─────────────────────────────────────────────────
@@ -241,14 +241,14 @@ class AssemblyAIRealtimeLLMService(LLMService):
         # Send system prompt
         if self._system_prompt:
             await self._send({
-                "type": "session.configure",
+                "type": "session.update",
                 "session": {"system_prompt": self._system_prompt},
             })
 
         # Flush any tools that were registered before session was ready
         if self._pending_tools:
             await self._send({
-                "type": "session.configure",
+                "type": "session.update",
                 "session": {"tools": self._pending_tools},
             })
             self._pending_tools = []
@@ -261,10 +261,10 @@ class AssemblyAIRealtimeLLMService(LLMService):
         self._user_transcript_buf = ""  # reset accumulator for new utterance
         await self.push_frame(UserStartedSpeakingFrame(), FrameDirection.UPSTREAM)
         # Interrupt the bot if it was speaking
-        if self._bot_speaking and self._current_response_id:
+        if self._bot_speaking and self._current_reply_id:
             await self._send({
-                "type": "response.cancel",
-                "response_id": self._current_response_id,
+                "type": "reply.cancel",
+                "reply_id": self._current_reply_id,
             })
 
     async def _on_speech_stopped(self) -> None:
@@ -292,7 +292,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
             )
 
     async def _on_response_started(self, event: dict) -> None:
-        self._current_response_id = event.get("response_id", "")
+        self._current_reply_id = event.get("reply_id", "")
         self._bot_speaking = True
         await self.push_frame(TTSStartedFrame())
         await self.push_frame(BotStartedSpeakingFrame())
@@ -314,13 +314,13 @@ class AssemblyAIRealtimeLLMService(LLMService):
             logger.info(f"[Agent] {text}")
 
     async def _on_response_done(self) -> None:
-        self._current_response_id = None
+        self._current_reply_id = None
         self._bot_speaking = False
         await self.push_frame(TTSStoppedFrame())
         await self.push_frame(BotStoppedSpeakingFrame())
 
     async def _on_response_interrupted(self) -> None:
-        self._current_response_id = None
+        self._current_reply_id = None
         self._bot_speaking = False
         await self.push_frame(TTSStoppedFrame())
         await self.push_frame(BotStoppedSpeakingFrame())
@@ -343,7 +343,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
                 result = f"Error: {e}"
 
         await self._send({
-            "type": "function.result",
+            "type": "tool.result",
             "call_id": call_id,
             "result": result if result is not None else "",
         })
@@ -397,7 +397,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
         """Send tool definitions to the session (call after session is ready)."""
         if self._session_ready:
             await self._send({
-                "type": "session.configure",
+                "type": "session.update",
                 "session": {"tools": tools},
             })
         else:
@@ -405,4 +405,4 @@ class AssemblyAIRealtimeLLMService(LLMService):
 
     async def trigger_response(self) -> None:
         """Manually trigger a response (useful when VAD is disabled)."""
-        await self._send({"type": "response.create"})
+        await self._send({"type": "reply.create"})

@@ -16,28 +16,28 @@ All audio must be:
 
 | Event | Payload | Description |
 |---|---|---|
-| `audio.append` | `{ audio: <base64 PCM16> }` | Send a chunk of microphone audio |
-| `session.configure` | `{ session: { system_prompt?, tools? } }` | Configure the session (send after `session.ready`) |
-| `response.create` | `{}` | Manually trigger a response (only needed if VAD is disabled) |
-| `response.cancel` | `{ response_id }` | Cancel an in-progress agent response |
-| `function.result` | `{ call_id, result }` | Return the result of a tool call |
+| `input.audio` | `{ audio: <base64 PCM16> }` | Send a chunk of microphone audio |
+| `session.update` | `{ session: { system_prompt?, tools? } }` | Configure the session (send after `session.ready`) |
+| `reply.create` | `{}` | Manually trigger a response (only needed if VAD is disabled) |
+| `reply.cancel` | `{ reply_id }` | Cancel an in-progress agent response |
+| `tool.result` | `{ call_id, result }` | Return the result of a tool call |
 
 ### Server → Client
 
 | Event | Payload | Description |
 |---|---|---|
 | `session.ready` | `{}` | Session is initialized — safe to send audio and configure tools |
-| `speech.started` | `{}` | Server-side VAD detected speech start |
-| `speech.stopped` | `{}` | Server-side VAD detected speech end |
+| `input.speech.started` | `{}` | Server-side VAD detected speech start |
+| `input.speech.stopped` | `{}` | Server-side VAD detected speech end |
 | `transcript.user.delta` | `{ text }` | Partial user transcript (cumulative) |
 | `transcript.user` | `{ text, item_id }` | Final user transcript |
-| `response.started` | `{ response_id }` | Agent response began |
-| `response.audio` | `{ data: <base64 PCM16> }` | A chunk of agent audio |
-| `response.transcript` | `{ text }` | Full agent response transcript |
-| `response.done` | `{ response_id }` | Agent response complete |
-| `response.interrupted` | `{}` | Agent response was interrupted by the user |
-| `function.call` | `{ call_id, name, args }` | The agent wants to call a tool |
-| `error` | `{ message }` | An error occurred |
+| `reply.started` | `{ reply_id }` | Agent response began |
+| `reply.audio` | `{ data: <base64 PCM16> }` | A chunk of agent audio |
+| `transcript.agent` | `{ text }` | Full agent response transcript |
+| `reply.done` | `{ reply_id }` | Agent response complete |
+| `reply.interrupted` | `{}` | Agent response was interrupted by the user |
+| `tool.call` | `{ call_id, name, args }` | The agent wants to call a tool |
+| `session.error` | `{ message }` | An error occurred |
 
 ## Python Quick Start
 
@@ -66,17 +66,17 @@ node client.js
 
 ## Tool Calling Protocol
 
-1. After `session.ready`, send a `session.configure` event with your tool definitions
-2. When the agent decides to use a tool, you receive a `function.call` event
-3. Execute the tool and send a `function.result` event with the `call_id` and result string
+1. After `session.ready`, send a `session.update` event with your tool definitions
+2. When the agent decides to use a tool, you receive a `tool.call` event
+3. Execute the tool and send a `tool.result` event with the `call_id` and result string
 4. The agent continues its response incorporating the tool result
 
 ```json
 // You receive:
-{ "type": "function.call", "call_id": "abc123", "name": "get_weather", "args": { "city": "London" } }
+{ "type": "tool.call", "call_id": "abc123", "name": "get_weather", "args": { "city": "London" } }
 
 // You send:
-{ "type": "function.result", "call_id": "abc123", "result": "London: Cloudy, 12°C" }
+{ "type": "tool.result", "call_id": "abc123", "result": "London: Cloudy, 12°C" }
 ```
 
 See `../tool-calling/` for more detailed tool calling examples.

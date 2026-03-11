@@ -176,21 +176,21 @@ twilio phone-numbers:update +15551234567 \
 
 ```
 Client -> Server:
-  audio.append       { type, audio: <base64 PCM16 24kHz mono> }
-  session.configure  { type, session: { system_prompt, tools } }
-  response.create    { type }    -- manual trigger
-  response.cancel    { type, response_id }
-  function.result    { type, call_id, result }
+  input.audio        { type, audio: <base64 PCM16 24kHz mono> }
+  session.update     { type, session: { system_prompt, tools } }
+  reply.create       { type }    -- manual trigger
+  reply.cancel       { type, reply_id }
+  tool.result        { type, call_id, result }
 
 Server -> Client:
   session.ready
-  speech.started / speech.stopped
+  input.speech.started / input.speech.stopped
   transcript.user.delta  { text }   -- partial
   transcript.user        { text, item_id }   -- final
-  response.started       { response_id }
-  response.audio         { data: base64 PCM16 }
-  response.transcript    { text }
-  response.done / response.interrupted
-  function.call          { call_id, name, args }
-  error                  { message }
+  reply.started          { reply_id }
+  reply.audio            { data: base64 PCM16 }
+  transcript.agent       { text }
+  reply.done / reply.interrupted
+  tool.call              { call_id, name, args }
+  session.error          { message }
 ```

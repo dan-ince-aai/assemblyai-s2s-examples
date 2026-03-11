@@ -128,7 +128,7 @@ async def run(url: str, api_key: str) -> None:
                     if chunks:
                         combined = b"".join(chunks)
                         b64 = base64.b64encode(combined).decode()
-                        await ws.send(json.dumps({"type": "audio.append", "audio": b64}))
+                        await ws.send(json.dumps({"type": "input.audio", "audio": b64}))
 
                     await asyncio.sleep(0.02)  # 20 ms send cadence
 
@@ -141,7 +141,7 @@ async def run(url: str, api_key: str) -> None:
                     if t == "session.ready":
                         print(f"{GREEN}Session ready — you can speak now.{RESET}")
 
-                    elif t == "speech.started":
+                    elif t == "input.speech.started":
                         print(f"\n{YELLOW}[listening...]{RESET}", end="", flush=True)
 
                     elif t == "transcript.user.delta":
@@ -152,23 +152,23 @@ async def run(url: str, api_key: str) -> None:
                         text = event.get("text", "")
                         print(f"\r{GREEN}[You] {text}{RESET}")
 
-                    elif t == "response.started":
+                    elif t == "reply.started":
                         print(f"{BLUE}[Agent speaking...]{RESET}")
 
-                    elif t == "response.audio":
+                    elif t == "reply.audio":
                         data = base64.b64decode(event.get("data", ""))
                         if data:
                             playback_queue.put(data)
 
-                    elif t == "response.transcript":
+                    elif t == "transcript.agent":
                         text = event.get("text", "")
                         if text:
                             print(f"{BLUE}[Agent] {text}{RESET}")
 
-                    elif t == "response.done":
+                    elif t == "reply.done":
                         print(f"{BLUE}[Agent done]{RESET}")
 
-                    elif t == "error":
+                    elif t == "session.error":
                         msg = event.get("message") or str(event)
                         print(f"{RED}[Error] {msg}{RESET}", file=sys.stderr)
 

@@ -94,7 +94,7 @@ async def media_stream(twilio_ws: WebSocket):
 
         # Configure the session
         await ws.send(json.dumps({
-            "type": "session.configure",
+            "type": "session.update",
             "session": {
                 "system_prompt": SYSTEM_PROMPT,
             },
@@ -124,7 +124,7 @@ async def media_stream(twilio_ws: WebSocket):
                     pcm_b64 = base64.b64encode(pcm_24k).decode("utf-8")
 
                     await aai_ws.send(json.dumps({
-                        "type": "audio.append",
+                        "type": "input.audio",
                         "audio": pcm_b64,
                     }))
 
@@ -149,7 +149,7 @@ async def media_stream(twilio_ws: WebSocket):
                 if event_type == "session.ready":
                     logger.info("AssemblyAI session ready")
 
-                elif event_type == "response.audio":
+                elif event_type == "reply.audio":
                     # AssemblyAI sends base64-encoded PCM16 24 kHz audio
                     pcm_b64 = msg.get("data", "")
                     if not pcm_b64:
@@ -168,7 +168,7 @@ async def media_stream(twilio_ws: WebSocket):
                         })
                         await twilio_ws.send_text(twilio_msg)
 
-                elif event_type == "function.call":
+                elif event_type == "tool.call":
                     call_id = msg.get("call_id")
                     name = msg.get("name")
                     args = msg.get("arguments", {})
@@ -176,26 +176,26 @@ async def media_stream(twilio_ws: WebSocket):
                     # Return a stub result — extend this to implement real tools
                     if aai_ws:
                         await aai_ws.send(json.dumps({
-                            "type": "function.result",
+                            "type": "tool.result",
                             "call_id": call_id,
                             "result": f"Tool '{name}' is not implemented in the phone bridge.",
                         }))
 
-                elif event_type == "error":
+                elif event_type == "session.error":
                     logger.error(f"AssemblyAI error: {msg.get('message')}")
 
                 elif event_type in (
                     "transcript.user.delta",
                     "transcript.user",
-                    "response.transcript",
-                    "response.done",
-                    "response.started",
-                    "response.interrupted",
-                    "speech.started",
-                    "speech.stopped",
+                    "transcript.agent",
+                    "reply.done",
+                    "reply.started",
+                    "reply.interrupted",
+                    "input.speech.started",
+                    "input.speech.stopped",
                 ):
                     # Log but don't send to Twilio (audio only on phone)
-                    if event_type in ("transcript.user", "response.transcript"):
+                    if event_type in ("transcript.user", "transcript.agent"):
                         text = msg.get("text", "")
                         role = "User" if event_type == "transcript.user" else "Agent"
                         logger.info(f"[{role}] {text}")

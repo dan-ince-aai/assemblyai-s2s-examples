@@ -6,13 +6,13 @@ These examples demonstrate the function calling protocol in the AssemblyAI S2S A
 
 The tool calling cycle has three steps:
 
-**1. Register tools in `session.configure`**
+**1. Register tools in `session.update`**
 
-Send a `session.configure` event after `session.ready` with a list of tool definitions in OpenAI function-calling format:
+Send a `session.update` event after `session.ready` with a list of tool definitions in OpenAI function-calling format:
 
 ```json
 {
-  "type": "session.configure",
+  "type": "session.update",
   "session": {
     "system_prompt": "You are a helpful assistant.",
     "tools": [
@@ -33,20 +33,20 @@ Send a `session.configure` event after `session.ready` with a list of tool defin
 }
 ```
 
-**2. Handle `function.call`**
+**2. Handle `tool.call`**
 
 When the agent decides to call a tool, you receive:
 
 ```json
-{ "type": "function.call", "call_id": "abc123", "name": "get_weather", "args": { "city": "London" } }
+{ "type": "tool.call", "call_id": "abc123", "name": "get_weather", "args": { "city": "London" } }
 ```
 
-**3. Send `function.result`**
+**3. Send `tool.result`**
 
 Execute the tool and send the result back. The agent will incorporate it into its response:
 
 ```json
-{ "type": "function.result", "call_id": "abc123", "result": "London: Cloudy, 12°C" }
+{ "type": "tool.result", "call_id": "abc123", "result": "London: Cloudy, 12°C" }
 ```
 
 ## Examples
