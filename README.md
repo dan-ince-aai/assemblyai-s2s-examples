@@ -7,17 +7,17 @@
 
 ## Quick Start
 
-| Example | Framework | Run locally | Deploy |
+| Example | Framework | Run locally | Deploy options |
 |---|---|---|---|
-| Basic agent | Pipecat | `cd pipecat/01-basic-agent && uv run bot.py` | Pipecat Cloud |
-| Lead capture | Pipecat | `cd pipecat/02-lead-capture-agent && uv run bot.py` | Pipecat Cloud |
-| Basic agent | LiveKit | `cd livekit/01-basic-agent && python agent.py dev` | LiveKit Cloud |
-| Onboarding agent | LiveKit | `cd livekit/02-onboarding-agent && python agent.py dev` | LiveKit Cloud |
+| Basic agent | Pipecat | `cd pipecat/01-basic-agent && uv run bot.py` | [Pipecat Cloud](https://pipecat.daily.co) |
+| Lead capture | Pipecat | `cd pipecat/02-lead-capture-agent && uv run bot.py` | [Pipecat Cloud](https://pipecat.daily.co) |
+| Basic agent | LiveKit | `cd livekit/01-basic-agent && python agent.py dev` | [LiveKit Cloud](https://cloud.livekit.io) |
+| Onboarding agent | LiveKit | `cd livekit/02-onboarding-agent && python agent.py dev` | [LiveKit Cloud](https://cloud.livekit.io) |
 | Raw WebSocket (Python) | WebSocket | `cd websocket/python && python basic_client.py` | Any server |
 | Raw WebSocket (Node) | WebSocket | `cd websocket/node && node client.js` | Any server |
 | Tool calling | WebSocket | `cd tool-calling && python 01_basic_tools.py` | Any server |
-| Phone agent | Twilio + FastAPI | `cd phone && uvicorn server:app --port 8080` | Railway / Render |
-| Voice web app | Next.js | `cd nextjs-frontend && npm run dev` | Railway / Render |
+| Phone agent | Twilio + FastAPI | `cd phone && uvicorn server:app --port 8080` | [Railway](https://railway.app) · [Fly.io](https://fly.io) · [Render](https://render.com) |
+| Voice web app | Next.js | `cd nextjs-frontend && npm run dev` | [Railway](https://railway.app) · [Fly.io](https://fly.io) · [Render](https://render.com) |
 
 ## Give Your Agent a Phone Number
 
@@ -112,7 +112,7 @@ For **all other examples**, the `phone/` directory contains a Twilio bridge (Fas
 
 ### Next.js Frontend
 
-The `nextjs-frontend/` directory is a complete web app you can deploy to Vercel with one click. See [nextjs-frontend/README.md](nextjs-frontend/README.md).
+The `nextjs-frontend/` directory is a complete web app with a built-in WebSocket proxy. Deploy to Railway, Fly.io, or Render. See [nextjs-frontend/README.md](nextjs-frontend/README.md).
 
 ## Deployment
 
