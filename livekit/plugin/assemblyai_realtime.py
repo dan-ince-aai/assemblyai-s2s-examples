@@ -35,7 +35,6 @@ class _Generation:
 
 
 def _serialize_tool(tool: llm.Tool) -> dict | None:
-    """Convert a FunctionTool or RawFunctionTool to the native session.update format."""
     if isinstance(tool, llm.FunctionTool):
         desc = llm.utils.build_legacy_openai_schema(tool, internally_tagged=True)
         return desc
@@ -45,6 +44,10 @@ def _serialize_tool(tool: llm.Tool) -> dict | None:
         raw["type"] = "function"
         return raw
     return None
+
+
+class _SessionExpiredError(Exception):
+    pass
 
 
 class RealtimeModel(llm.RealtimeModel):
@@ -95,10 +98,11 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         self._pending_reply_fut: asyncio.Future[llm.GenerationCreatedEvent] | None = (
             None
         )
-        self._current_reply_id: str | None = None
+        self._current_response_id: str | None = None
 
         self._pending_call_ids: set[str] = set()
         self._session_ready: bool = False
+        self._session_id: str | None = None
 
         self._bstream = utils.audio.AudioByteStream(
             SAMPLE_RATE, NUM_CHANNELS, samples_per_channel=_SAMPLES_PER_CHUNK
@@ -140,7 +144,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
                 )
 
     def push_video(self, frame: rtc.VideoFrame) -> None:
-        pass  # not supported
+        pass
 
     def generate_reply(
         self, *, instructions: NotGivenOr[str] = NOT_GIVEN
@@ -151,7 +155,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         self._send({"type": "reply.create"})
 
         def _on_timeout() -> None:
-            if fut and not fut.done():
+            if not fut.done():
                 fut.set_exception(llm.RealtimeError("generate_reply timed out."))
 
         handle = loop.call_later(5.0, _on_timeout)
@@ -159,16 +163,14 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         return fut
 
     def interrupt(self) -> None:
-        if self._current_reply_id:
-            self._send(
-                {"type": "reply.cancel", "reply_id": self._current_reply_id}
-            )
+        if self._current_response_id:
+            self._send({"type": "reply.cancel", "reply_id": self._current_response_id})
 
     def commit_audio(self) -> None:
         pass  # server-side VAD; no client commit needed
 
     def clear_audio(self) -> None:
-        pass  # no-op
+        pass
 
     def truncate(
         self,
@@ -222,10 +224,13 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
                     "user",
                     "system",
                 ):
-                    text = item.text_content or ""
-                    if text:
+                    if item.text_content:
                         self._send(
-                            {"type": "conversation.message", "role": item.role, "content": text}
+                            {
+                                "type": "conversation.message",
+                                "role": item.role,
+                                "content": item.text_content,
+                            }
                         )
         self._chat_ctx = chat_ctx
 
@@ -237,68 +242,123 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
 
     @utils.log_exceptions(logger=logger)
     async def _run(self) -> None:
-        headers = {"Authorization": f"Bearer {self._model._api_key}"}
-        try:
-            ws = await self._model._ensure_http_session().ws_connect(
-                self._model._url, headers=headers
-            )
-        except aiohttp.ClientError as e:
-            raise APIConnectionError("AssemblyAI Realtime connection error") from e
+        MAX_RECONNECT_ATTEMPTS = 3
+        BACKOFF_SECONDS = [0.5, 1.0, 2.0]
 
-        closing = False
-
-        @utils.log_exceptions(logger=logger)
-        async def _send_task() -> None:
-            nonlocal closing
-            async for msg in self._msg_ch:
+        for attempt in range(MAX_RECONNECT_ATTEMPTS + 1):
+            try:
+                headers = {"Authorization": f"Bearer {self._model._api_key}"}
                 try:
-                    await ws.send_str(json.dumps(msg))
-                except Exception:
-                    logger.exception("failed to send event")
-            closing = True
-            await ws.close()
-
-        @utils.log_exceptions(logger=logger)
-        async def _recv_task() -> None:
-            while True:
-                msg = await ws.receive()
-                if msg.type in (
-                    aiohttp.WSMsgType.CLOSED,
-                    aiohttp.WSMsgType.CLOSE,
-                    aiohttp.WSMsgType.CLOSING,
-                ):
-                    if closing:
-                        return
-                    raise APIConnectionError(
-                        "AssemblyAI Realtime connection closed unexpectedly"
+                    ws = await self._model._ensure_http_session().ws_connect(
+                        self._model._url, headers=headers
                     )
-                if msg.type != aiohttp.WSMsgType.TEXT:
-                    continue
-                try:
-                    event = json.loads(msg.data)
-                    self._handle_event(event)
-                except Exception:
-                    logger.exception("failed to handle event", extra={"data": msg.data})
+                except aiohttp.ClientError as e:
+                    raise APIConnectionError(
+                        "AssemblyAI Realtime connection error"
+                    ) from e
 
-        tasks = [
-            asyncio.create_task(_recv_task(), name="_recv_task"),
-            asyncio.create_task(_send_task(), name="_send_task"),
-        ]
-        try:
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            for task in done:
-                task.result()
-        finally:
-            await utils.aio.cancel_and_wait(*tasks)
-            await ws.close()
+                if self._session_id is not None:
+                    try:
+                        await ws.send_str(
+                            json.dumps(
+                                {
+                                    "type": "session.resume",
+                                    "session_id": self._session_id,
+                                }
+                            )
+                        )
+                    except Exception as e:
+                        raise APIConnectionError("Failed to send session.resume") from e
+
+                # Reset per-connection state (preserve: _chat_ctx, _tools, _session_id,
+                #                                         _pending_call_ids)
+                self._session_ready = False
+                self._current_response_id = None
+                self._close_current_gen()
+                if self._pending_reply_fut:
+                    self._pending_reply_fut.cancel()
+                    self._pending_reply_fut = None
+                self._bstream = utils.audio.AudioByteStream(
+                    SAMPLE_RATE, NUM_CHANNELS, samples_per_channel=_SAMPLES_PER_CHUNK
+                )
+
+                closing = False
+
+                @utils.log_exceptions(logger=logger)
+                async def _send_task() -> None:
+                    nonlocal closing
+                    async for msg in self._msg_ch:
+                        try:
+                            await ws.send_str(json.dumps(msg))
+                        except Exception:
+                            logger.exception("failed to send event")
+                    closing = True
+                    await ws.close()
+
+                @utils.log_exceptions(logger=logger)
+                async def _recv_task() -> None:
+                    while True:
+                        msg = await ws.receive()
+                        if msg.type in (
+                            aiohttp.WSMsgType.CLOSED,
+                            aiohttp.WSMsgType.CLOSE,
+                            aiohttp.WSMsgType.CLOSING,
+                        ):
+                            if closing:
+                                return
+                            raise APIConnectionError(
+                                "AssemblyAI Realtime connection closed unexpectedly"
+                            )
+                        if msg.type != aiohttp.WSMsgType.TEXT:
+                            continue
+                        try:
+                            event = json.loads(msg.data)
+                            self._handle_event(event)
+                        except _SessionExpiredError:
+                            # Server rejected resume — fall back to fresh session
+                            self._session_id = None
+                            self._pending_call_ids.clear()
+                            raise APIConnectionError(
+                                "Session expired; retrying as fresh session"
+                            )
+                        except Exception:
+                            logger.exception(
+                                "failed to handle event", extra={"data": msg.data}
+                            )
+
+                tasks = [
+                    asyncio.create_task(_recv_task(), name="_recv_task"),
+                    asyncio.create_task(_send_task(), name="_send_task"),
+                ]
+                try:
+                    done, _ = await asyncio.wait(
+                        tasks, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    for task in done:
+                        task.result()
+                    return  # clean exit — do not retry
+                finally:
+                    await utils.aio.cancel_and_wait(*tasks)
+                    await ws.close()
+
+            except APIConnectionError:
+                if attempt >= MAX_RECONNECT_ATTEMPTS:
+                    raise
+                backoff = BACKOFF_SECONDS[attempt]
+                logger.warning(
+                    "Connection lost, retrying (attempt %d/%d, backoff=%.1fs, session_id=%s)",
+                    attempt + 1,
+                    MAX_RECONNECT_ATTEMPTS,
+                    backoff,
+                    self._session_id,
+                )
+                await asyncio.sleep(backoff)
 
     # ── event routing ─────────────────────────────────────────────────────
 
     def _handle_event(self, event: dict) -> None:
+        self.emit(f"aai.{event.get('type', '')}", event)
         t = event.get("type", "")
-        # Log every event except high-frequency audio
-        if t != "reply.audio":
-            logger.debug(f"← {t}  {event}")
         if t == "session.ready":
             self._handle_session_ready(event)
         elif t == "input.speech.started":
@@ -324,9 +384,7 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         elif t == "transcript.agent":
             self._handle_transcript_done(event)
         elif t == "reply.done":
-            self._handle_response_done(event)
-        elif t == "reply.interrupted":
-            self._handle_response_interrupted(event)
+            self._handle_reply_done(event)
         elif t == "tool.call":
             self._handle_function_call(event)
         elif t == "session.updated":
@@ -338,12 +396,28 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
 
     def _handle_session_ready(self, event: dict) -> None:
         self._session_ready = True
+        self._session_id = event.get("session_id")
+        # Flush FC results that completed locally but weren't sent during reconnect
+        for item in self._chat_ctx.items:
+            if (
+                isinstance(item, llm.FunctionCallOutput)
+                and item.call_id in self._pending_call_ids
+            ):
+                self._send(
+                    {
+                        "type": "tool.result",
+                        "call_id": item.call_id,
+                        "result": item.output,
+                    }
+                )
+                self._pending_call_ids.discard(item.call_id)
         if self._pending_reply_fut and not self._pending_reply_fut.done():
             self._send({"type": "reply.create"})
 
     def _handle_response_started(self, event: dict) -> None:
+        self._close_current_gen()
         response_id = event.get("reply_id", "")
-        self._current_reply_id = response_id
+        self._current_response_id = response_id
 
         text_ch: utils.aio.Chan[str] = utils.aio.Chan()
         audio_ch: utils.aio.Chan[rtc.AudioFrame] = utils.aio.Chan()
@@ -408,23 +482,23 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         text = event.get("text", "")
         if text:
             gen.text_ch.send_nowait(text)
-            print(f"[Agent] {text}\n")
-        if not gen.text_ch.closed:
-            gen.text_ch.close()
+        gen.text_ch.close()
 
-    def _handle_response_done(self, event: dict) -> None:
+    def _handle_reply_done(self, event: dict) -> None:
         self._close_current_gen()
-        self._current_reply_id = None
-
-    def _handle_response_interrupted(self, event: dict) -> None:
-        self._close_current_gen()
-        self._current_reply_id = None
+        self._current_response_id = None
 
     def _handle_function_call(self, event: dict) -> None:
         gen = self._current_gen
         if gen is None:
             return
         call_id = event.get("call_id", "")
+        if call_id in self._pending_call_ids:
+            return
+        for item in self._chat_ctx.items:
+            if isinstance(item, llm.FunctionCallOutput) and item.call_id == call_id:
+                self._pending_call_ids.add(call_id)
+                return
         self._pending_call_ids.add(call_id)
         name = event.get("name", "")
         args = event.get("args", {})
@@ -432,19 +506,20 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
             llm.FunctionCall(
                 call_id=call_id,
                 name=name,
-                arguments=json.dumps(args) if not isinstance(args, str) else args,
+                arguments=json.dumps(args),
             )
         )
 
     def _handle_error(self, event: dict) -> None:
-        msg = event.get("message") or event.get("error") or str(event)
-        logger.error(f"AssemblyAI server error: {msg}  full={event}")
+        code = event.get("code", "")
+        if code in ("session_not_found", "session_forbidden"):
+            raise _SessionExpiredError(event.get("message", ""))
         self.emit(
             "error",
             llm.RealtimeModelError(
                 timestamp=time.time(),
                 label=self._model.label,
-                error=Exception(msg),
+                error=Exception(event.get("message", "unknown error")),
                 recoverable=False,
             ),
         )
@@ -453,14 +528,10 @@ class RealtimeSession(llm.RealtimeSession[Literal[()]]):
         gen = self._current_gen
         if gen is None:
             return
-        if not gen.audio_ch.closed:
-            gen.audio_ch.close()
-        if not gen.text_ch.closed:
-            gen.text_ch.close()
-        if not gen.fn_ch.closed:
-            gen.fn_ch.close()
-        if not gen.msg_ch.closed:
-            gen.msg_ch.close()
+        gen.audio_ch.close()
+        gen.text_ch.close()
+        gen.fn_ch.close()
+        gen.msg_ch.close()
         self._current_gen = None
 
     # ── audio resampling ──────────────────────────────────────────────────

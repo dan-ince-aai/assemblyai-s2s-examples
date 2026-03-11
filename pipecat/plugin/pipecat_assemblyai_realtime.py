@@ -8,7 +8,6 @@ Protocol summary (→ = client sends, ← = server sends):
   → input.audio           { audio: <base64 PCM> }
   → session.update        { session: { system_prompt, tools, ... } }
   → reply.create          (trigger a response manually)
-  → reply.cancel          { reply_id }
   → tool.result           { call_id, result }
   ← session.ready
   ← input.speech.started / input.speech.stopped
@@ -16,7 +15,7 @@ Protocol summary (→ = client sends, ← = server sends):
   ← reply.started         { reply_id }
   ← reply.audio           { data: <base64 PCM> }
   ← transcript.agent      { text }  (full agent turn transcript)
-  ← reply.done / reply.interrupted
+  ← reply.done            { reply_id, status: completed | interrupted }
   ← tool.call             { call_id, name, args }
   ← session.error         { message }
 """
@@ -113,7 +112,7 @@ class AssemblyAIRealtimeLLMService(LLMService):
     # ── WebSocket ─────────────────────────────────────────────────────────────
 
     async def _connect(self) -> None:
-        headers = {"Authorization": f"Bearer {self._api_key}"}
+        headers = {"Authorization": self._api_key}
         try:
             self._websocket = await websockets.asyncio.client.connect(
                 self._url,
@@ -124,6 +123,14 @@ class AssemblyAIRealtimeLLMService(LLMService):
                 name="AssemblyAIRealtime._recv",
             )
             logger.info(f"Connected to AssemblyAI S2S at {self._url}")
+            # Send system_prompt immediately so the server has it before session.ready
+            # fires. This prevents a circular dependency where the server waits for
+            # config before signalling ready, and we wait for ready before sending config.
+            if self._system_prompt:
+                await self._send({
+                    "type": "session.update",
+                    "session": {"system_prompt": self._system_prompt},
+                })
         except Exception as e:
             logger.error(f"Failed to connect: {e}")
             await self.push_frame(ErrorFrame(str(e)))
@@ -147,6 +154,8 @@ class AssemblyAIRealtimeLLMService(LLMService):
         if self._websocket:
             try:
                 await self._websocket.send(json.dumps(msg))
+            except websockets.exceptions.ConnectionClosedOK:
+                pass  # normal disconnect — pipeline flushing after client left
             except Exception as e:
                 logger.error(f"WebSocket send error: {e}")
                 await self.push_frame(ErrorFrame(str(e)))
@@ -225,8 +234,6 @@ class AssemblyAIRealtimeLLMService(LLMService):
             await self._on_response_transcript(event)
         elif t == "reply.done":
             await self._on_response_done()
-        elif t == "reply.interrupted":
-            await self._on_response_interrupted()
         elif t == "tool.call":
             await self._on_function_call(event)
         elif t == "session.error":
@@ -237,13 +244,6 @@ class AssemblyAIRealtimeLLMService(LLMService):
     async def _on_session_ready(self, event: dict) -> None:
         self._session_ready = True
         logger.info("AssemblyAI session ready")
-
-        # Send system prompt
-        if self._system_prompt:
-            await self._send({
-                "type": "session.update",
-                "session": {"system_prompt": self._system_prompt},
-            })
 
         # Flush any tools that were registered before session was ready
         if self._pending_tools:
@@ -260,12 +260,6 @@ class AssemblyAIRealtimeLLMService(LLMService):
     async def _on_speech_started(self) -> None:
         self._user_transcript_buf = ""  # reset accumulator for new utterance
         await self.push_frame(UserStartedSpeakingFrame(), FrameDirection.UPSTREAM)
-        # Interrupt the bot if it was speaking
-        if self._bot_speaking and self._current_reply_id:
-            await self._send({
-                "type": "reply.cancel",
-                "reply_id": self._current_reply_id,
-            })
 
     async def _on_speech_stopped(self) -> None:
         await self.push_frame(UserStoppedSpeakingFrame(), FrameDirection.UPSTREAM)
@@ -314,12 +308,6 @@ class AssemblyAIRealtimeLLMService(LLMService):
             logger.info(f"[Agent] {text}")
 
     async def _on_response_done(self) -> None:
-        self._current_reply_id = None
-        self._bot_speaking = False
-        await self.push_frame(TTSStoppedFrame())
-        await self.push_frame(BotStoppedSpeakingFrame())
-
-    async def _on_response_interrupted(self) -> None:
         self._current_reply_id = None
         self._bot_speaking = False
         await self.push_frame(TTSStoppedFrame())
