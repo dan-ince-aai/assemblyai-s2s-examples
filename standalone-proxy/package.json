@@ -1,0 +1,14 @@
+{
+  "name": "assemblyai-s2s-proxy",
+  "version": "0.1.0",
+  "description": "Standalone WebSocket proxy for AssemblyAI S2S API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.0"
+  }
+}

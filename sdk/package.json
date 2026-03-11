@@ -1,0 +1,26 @@
+{
+  "name": "@assemblyai/s2s-client",
+  "version": "0.1.0",
+  "description": "Browser client SDK for AssemblyAI Speech-to-Speech API",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "keywords": [
+    "assemblyai",
+    "speech-to-speech",
+    "voice",
+    "realtime"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsup": "^8.0.0"
+  }
+}

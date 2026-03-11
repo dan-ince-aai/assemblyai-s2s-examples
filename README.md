@@ -18,6 +18,48 @@
 | Tool calling | WebSocket | `cd tool-calling && python 01_basic_tools.py` | Any server |
 | Phone agent | Twilio + FastAPI | `cd phone && uvicorn server:app --port 8080` | [Railway](https://railway.app) · [Fly.io](https://fly.io) · [Render](https://render.com) |
 | Voice web app | Next.js | `cd nextjs-frontend && npm run dev` | [Railway](https://railway.app) · [Fly.io](https://fly.io) · [Render](https://render.com) |
+| Browser SDK | Vanilla TS | `cd sdk && npm install && npm run build` | CDN / any host |
+| WebSocket proxy | Node.js | `cd standalone-proxy && npm install && npm start` | [Railway](https://railway.app) · [Fly.io](https://fly.io) · Docker |
+
+## Embed in Any App
+
+Use the browser SDK and proxy to add a voice agent to any web app in minutes.
+
+### 1. Deploy the proxy (holds your API key)
+
+```bash
+cd standalone-proxy
+railway login && railway init && railway up
+# Set ASSEMBLYAI_API_KEY in Railway dashboard
+```
+
+### 2. Add the SDK to your app
+
+```bash
+npm install @assemblyai/s2s-client
+```
+
+```typescript
+import { AssemblyAIS2S } from '@assemblyai/s2s-client';
+
+const agent = new AssemblyAIS2S({
+  proxyUrl: 'wss://your-proxy.railway.app',
+  onTranscript: (text) => console.log('User:', text),
+  onAgentText: (text) => console.log('Agent:', text),
+});
+
+button.onclick = () => agent.start();
+```
+
+### Or: one-line embeddable widget
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@assemblyai/s2s-client/dist/widget.js"
+        data-proxy="wss://your-proxy.railway.app">
+</script>
+```
+
+See [sdk/README.md](sdk/README.md) and [standalone-proxy/README.md](standalone-proxy/README.md).
 
 ## Give Your Agent a Phone Number
 
