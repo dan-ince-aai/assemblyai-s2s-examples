@@ -2,7 +2,7 @@
 
 > A collection of production-ready voice agent examples using AssemblyAI's native Speech-to-Speech API. Clone any example, add your API key, and go.
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repository=https://github.com/dan-ince-aai/assemblyai-s2s-examples)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/github?repo=https://github.com/dan-ince-aai/assemblyai-s2s-examples)
 
 
 ## Quick Start
