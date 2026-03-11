@@ -36,7 +36,7 @@ python agent.py dev
 
 ```python
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'plugin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'plugin'))
 
 from assemblyai_realtime import RealtimeModel as AssemblyAIRealtimeModel
 

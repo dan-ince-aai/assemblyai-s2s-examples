@@ -18,7 +18,7 @@ import sys
 import os
 
 # Import plugin from parent directory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'plugin'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'plugin'))
 
 import logging
 
