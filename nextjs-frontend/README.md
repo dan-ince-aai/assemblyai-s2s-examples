@@ -2,7 +2,7 @@
 
 A complete Next.js 15 web application for real-time voice conversations with AssemblyAI's Speech-to-Speech API. Dark-themed, mobile-friendly, and deployable to Vercel in one click.
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/github?repo=https://github.com/dan-ince-aai/assemblyai-s2s-examples)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/dan-ince-aai/assemblyai-s2s-examples&envs=ASSEMBLYAI_API_KEY&ASSEMBLYAI_API_KEYDesc=Your+AssemblyAI+API+key+from+assemblyai.com)
 
 ## What it does
 
