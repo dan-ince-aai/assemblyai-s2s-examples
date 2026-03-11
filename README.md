@@ -2,7 +2,7 @@
 
 > A collection of production-ready voice agent examples using AssemblyAI's native Speech-to-Speech API. Clone any example, add your API key, and go.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/AssemblyAI/assemblyai-s2s-examples/tree/main/nextjs-frontend&env=NEXT_PUBLIC_ASSEMBLYAI_API_KEY,NEXT_PUBLIC_ASSEMBLYAI_URL&project-name=assemblyai-voice-agent)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/AssemblyAI/assemblyai-s2s-examples/tree/main/nextjs-frontend&env=NEXT_PUBLIC_ASSEMBLYAI_API_KEY&project-name=assemblyai-voice-agent)
 
 ## Quick Start
 

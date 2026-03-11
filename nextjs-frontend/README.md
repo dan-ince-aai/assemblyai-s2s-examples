@@ -2,7 +2,7 @@
 
 A complete Next.js 15 web application for real-time voice conversations with AssemblyAI's Speech-to-Speech API. Dark-themed, mobile-friendly, and deployable to Vercel in one click.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/OWNER/assemblyai-s2s-examples/tree/main/nextjs-frontend&env=NEXT_PUBLIC_ASSEMBLYAI_API_KEY,NEXT_PUBLIC_ASSEMBLYAI_URL&project-name=assemblyai-voice-agent)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/AssemblyAI/assemblyai-s2s-examples/tree/main/nextjs-frontend&env=NEXT_PUBLIC_ASSEMBLYAI_API_KEY&project-name=assemblyai-voice-agent)
 
 ## What it does
 
@@ -30,7 +30,7 @@ npm run dev
 
 ### One-click deploy
 
-Click the button above and set the environment variables in the Vercel UI.
+Click the button above — you'll only be asked for your `NEXT_PUBLIC_ASSEMBLYAI_API_KEY`. The API URL defaults to the US region automatically.
 
 ### CLI deploy
 
@@ -45,16 +45,7 @@ vercel login
 vercel --prod
 ```
 
-When prompted, set:
-- `NEXT_PUBLIC_ASSEMBLYAI_API_KEY` — your AssemblyAI API key
-- `NEXT_PUBLIC_ASSEMBLYAI_URL` — `wss://speech-to-speech.us.assemblyai.com/v1/realtime`
-
-You can also set these after deployment in the Vercel dashboard under Settings -> Environment Variables.
-
-| Variable | Value |
-|---|---|
-| `NEXT_PUBLIC_ASSEMBLYAI_API_KEY` | Your AssemblyAI API key |
-| `NEXT_PUBLIC_ASSEMBLYAI_URL` | `wss://speech-to-speech.us.assemblyai.com/v1/realtime` |
+The only environment variable you need is `NEXT_PUBLIC_ASSEMBLYAI_API_KEY`. Set it in the Vercel dashboard under Settings → Environment Variables, or when prompted by the CLI.
 
 ## Architecture — Audio Flow
 

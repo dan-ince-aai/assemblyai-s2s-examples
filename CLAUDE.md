@@ -79,7 +79,7 @@ cd nextjs-frontend
 npm i -g vercel
 vercel login
 vercel --prod
-# When prompted: set NEXT_PUBLIC_ASSEMBLYAI_API_KEY and NEXT_PUBLIC_ASSEMBLYAI_URL
+# When prompted: set NEXT_PUBLIC_ASSEMBLYAI_API_KEY
 ```
 
 ### "I want to deploy to Railway"
